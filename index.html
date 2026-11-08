@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airtel Network Access & Security Manager</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        airtel: {
+                            red: '#e21b23',
+                            dark: '#b31017',
+                            light: '#fdf2f2'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-airtel-red text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="font-black text-2xl tracking-tighter uppercase italic">airtel</span>
+                <span class="text-xs bg-white text-airtel-red px-2 py-0.5 rounded font-bold uppercase">LuCI Control Center</span>
+            </div>
+            <div class="flex items-center space-x-4 text-sm font-medium">
+                <span id="gateway-status" class="flex items-center"><i class="fa-solid fa-circle text-green-400 text-xs mr-1.5"></i> Connected (192.168.1.1)</span>
+                <button onclick="openLoginModal()" id="router-login-btn" class="bg-white text-airtel-red px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-right-to-bracket mr-1"></i> Connect Router
+                </button>
+                <button onclick="toggleStrictWhitelistMode()" id="strict-whitelist-btn" class="bg-red-950 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition shadow">
+                    <i class="fa-solid fa-shield-halved mr-1.5 text-yellow-400"></i> Strict Whitelist: OFF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sub Header Tabs -->
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 flex space-x-6">
+            <button onclick="switchTab('devices')" id="tab-btn-devices" class="py-3 px-2 border-b-2 border-airtel-red font-semibold text-airtel-red text-sm flex items-center">
+                <i class="fa-solid fa-network-wired mr-2"></i> Connected Clients & Detection
+            </button>
+            <button onclick="switchTab('firewall')" id="tab-btn-firewall" class="py-3 px-2 border-b-2 border-transparent font-medium text-gray-500 hover:text-airtel-red text-sm flex items-center">
+                <i class="fa-solid fa-fire-burner mr-2"></i> Firewall Rules (Airtel LuCI)
+            </button>
+            <button onclick="switchTab('dhcp')" id="tab-btn-dhcp" class="py-3 px-2 border-b-2 border-transparent font-medium text-gray-500 hover:text-airtel-red text-sm flex items-center">
+                <i class="fa-solid fa-server mr-2"></i> Static IP Reservations
+            </button>
+            <button onclick="switchTab('managed')" id="tab-btn-managed" class="py-3 px-2 border-b-2 border-transparent font-medium text-gray-500 hover:text-airtel-red text-sm flex items-center">
+                <i class="fa-solid fa-id-card mr-2"></i> Managed Devices
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- TAB 1: CONNECTED CLIENTS & MAC INSPECTOR -->
+        <div id="tab-devices" class="space-y-6">
+            <!-- Alert Banner -->
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r shadow-sm">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 text-amber-600">
+                        <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-bold text-amber-800">MAC Address Randomization Warning</h3>
+                        <p class="text-xs text-amber-700 mt-1">
+                            Modern smartphones (OPPO, Samsung, Apple) auto-generate randomized virtual MAC addresses when connecting. 
+                            <strong>Rules built on randomized MACs will break when the phone generates a new one.</strong> Use this dashboard to detect randomized MACs or lock down devices using Static IP leases.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Action Bar -->
+            <div class="flex justify-between items-center bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fa-solid fa-laptop-mobile mr-2 text-airtel-red"></i> Detected Local Devices
+                </h2>
+                <div class="flex space-x-2">
+                    <button onclick="openRuleModal()" class="bg-airtel-red hover:bg-airtel-dark text-white px-4 py-2 rounded-md text-xs font-semibold shadow transition">
+                        <i class="fa-solid fa-plus mr-1"></i> Add Manual Rule
+                    </button>
+                </div>
+            </div>
+
+            <!-- Client Table -->
+            <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold uppercase text-gray-500">
+                        <tr>
+                            <th class="py-3 px-4">Device Name</th>
+                            <th class="py-3 px-4">IP Address</th>
+                            <th class="py-3 px-4">MAC Address</th>
+                            <th class="py-3 px-4">MAC Address Type</th>
+                            <th class="py-3 px-4">Status</th>
+                            <th class="py-3 px-4 text-right">Quick Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-table-body" class="divide-y divide-gray-100">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 2: FIREWALL RULES (ROUTER SIMULATOR) -->
+        <div id="tab-firewall" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-800">Active Firewall Rules</h2>
+                    <p class="text-xs text-gray-500">Mirror of Airtel Router Luci Administration (`/cgi-bin/luci/admin/routerweb/more.htm`)</p>
+                </div>
+                <button onclick="openRuleModal()" class="bg-airtel-red hover:bg-airtel-dark text-white px-4 py-2 rounded-md text-xs font-semibold shadow transition">
+                    <i class="fa-solid fa-plus mr-1"></i> Add Rule
+                </button>
+            </div>
+
+            <!-- Firewall Rule List Table -->
+            <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold uppercase text-gray-500">
+                        <tr>
+                            <th class="py-3 px-4">Rule Name</th>
+                            <th class="py-3 px-4">Filter Type</th>
+                            <th class="py-3 px-4">Source (LAN)</th>
+                            <th class="py-3 px-4">Destination (WAN)</th>
+                            <th class="py-3 px-4">Port / Proto</th>
+                            <th class="py-3 px-4">Action</th>
+                            <th class="py-3 px-4 text-right">Manage</th>
+                        </tr>
+                    </thead>
+                    <tbody id="firewall-rules-body" class="divide-y divide-gray-100">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 3: STATIC IP RESERVATIONS -->
+        <div id="tab-dhcp" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-800">Static DHCP Address Leases</h2>
+                    <p class="text-xs text-gray-500">Ensure devices always maintain the exact same local IP address across reconnects.</p>
+                </div>
+                <button onclick="addStaticLeasePrompt()" class="bg-gray-800 hover:bg-black text-white px-4 py-2 rounded-md text-xs font-semibold shadow transition">
+                    <i class="fa-solid fa-bookmark mr-1"></i> Bind New Lease
+                </button>
+            </div>
+
+            <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold uppercase text-gray-500">
+                        <tr>
+                            <th class="py-3 px-4">Hostname</th>
+                            <th class="py-3 px-4">MAC Address</th>
+                            <th class="py-3 px-4">Assigned IP Address</th>
+                            <th class="py-3 px-4">Lease Type</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dhcp-leases-body" class="divide-y divide-gray-100">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-managed" class="hidden space-y-6">
+            <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800">Managed Devices</h2>
+                <p class="text-xs text-gray-500 mt-1">Blocked customers and devices with paid usage credits remain here for later renewal.</p>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold uppercase text-gray-500">
+                        <tr>
+                            <th class="py-3 px-4">Customer / Device</th>
+                            <th class="py-3 px-4">IP / MAC</th>
+                            <th class="py-3 px-4">Status</th>
+                            <th class="py-3 px-4">Access Expires</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="managed-devices-body" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- CREATE NEW RULE MODAL (AIRTEL LUCI STYLE) -->
+    <div id="rule-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200">
+            <!-- Modal Header -->
+            <div class="bg-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-base font-bold text-gray-800">Create New Rule</h3>
+                <button onclick="closeRuleModal()" class="text-gray-400 hover:text-gray-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body (Matching user screenshot) -->
+            <form id="rule-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4 text-sm">
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Name</label>
+                    <input type="text" id="modal-name" required placeholder="e.g. Laptop" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-airtel-red focus:border-airtel-red text-sm outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Filter Type</label>
+                    <div class="flex items-center space-x-6 pt-1">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" name="filterType" value="MAC Filter" onchange="toggleFilterFields('MAC')" class="text-airtel-red focus:ring-airtel-red">
+                            <span>MAC Filter</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" name="filterType" value="IP Filter" checked onchange="toggleFilterFields('IP')" class="text-airtel-red focus:ring-airtel-red">
+                            <span>IP Filter</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- MAC Field -->
+                <div id="field-mac-container" class="hidden">
+                    <label class="block text-gray-700 font-medium mb-1">Source MAC</label>
+                    <input type="text" id="modal-mac" placeholder="aa:bb:cc:dd:ee:ff" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-airtel-red focus:border-airtel-red text-sm outline-none">
+                </div>
+
+                <!-- Source IP Field -->
+                <div id="field-source-ip-container">
+                    <label class="block text-gray-700 font-medium mb-1">Source IP</label>
+                    <div class="flex space-x-2">
+                        <select id="modal-source-interface" class="w-28 px-2 py-2 border border-gray-300 rounded bg-gray-50 text-sm">
+                            <option value="LAN">LAN</option>
+                            <option value="WAN">WAN</option>
+                        </select>
+                        <input type="text" id="modal-source-ip" placeholder="192.168.1.111" class="flex-grow px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-airtel-red focus:border-airtel-red text-sm outline-none">
+                    </div>
+                </div>
+
+                <!-- Destination IP Field -->
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Destination IP</label>
+                    <div class="flex space-x-2">
+                        <select id="modal-dest-interface" class="w-28 px-2 py-2 border border-gray-300 rounded bg-gray-50 text-sm">
+                            <option value="WAN">WAN</option>
+                            <option value="LAN">LAN</option>
+                        </select>
+                        <input type="text" id="modal-dest-ip" placeholder="Any / Blank" class="flex-grow px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-airtel-red focus:border-airtel-red text-sm outline-none">
+                    </div>
+                </div>
+
+                <!-- Port & Protocol Field -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Port</label>
+                        <input type="text" id="modal-port" placeholder="Leave empty for ALL" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-airtel-red focus:border-airtel-red text-sm outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-1">Protocol</label>
+                        <select id="modal-protocol" class="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm">
+                            <option value="TCP">TCP</option>
+                            <option value="UDP">UDP</option>
+                            <option value="TCP/UDP">TCP/UDP</option>
+                            <option value="ALL">ALL</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Action Selection -->
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">Action</label>
+                    <select id="modal-action" class="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm font-semibold text-gray-800">
+                        <option value="ALLOW">ALLOW Access</option>
+                        <option value="DENY">DENY / Block Access</option>
+                    </select>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                    <button type="button" onclick="closeRuleModal()" class="px-4 py-2 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 text-xs font-semibold">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow">Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="login-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6">
+            <h3 class="text-lg font-bold mb-2">Connect to TYRAX3004H</h3>
+            <p class="text-xs text-gray-500 mb-4">Enter the router management password. It is held only in the local proxy process.</p>
+            <form onsubmit="loginToRouter(event)" class="space-y-4">
+                <input id="router-password" type="password" autocomplete="current-password" required class="w-full border rounded px-3 py-2">
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeLoginModal()" class="px-4 py-2 border rounded text-sm">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-airtel-red text-white rounded text-sm">Connect</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let devices = [];
+
+        let firewallRules = [
+            { id: 1, name: 'Laptop-Access', filterType: 'IP Filter', sourceIp: '192.168.1.111', destIp: 'WAN', port: 'ALL', proto: 'TCP', action: 'ALLOW' }
+        ];
+
+        let dhcpLeases = [
+            { hostname: 'Avaxard-s-A06', mac: '8a:6b:62:4a:b7:c2', ip: '192.168.1.111', type: 'Dynamic' },
+            { hostname: 'OPPO-A18', mac: '2e:31:7c:18:be:42', ip: '192.168.1.137', type: 'Dynamic' },
+            { hostname: 'OPPO-Reno3-5G', mac: 'ee:34:ba:67:d4:7e', ip: '192.168.1.141', type: 'Dynamic' }
+        ];
+
+        let strictWhitelist = false;
+        let managedDevices = [];
+
+        async function api(path, options = {}) {
+            const response = await fetch(path, options);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Router request failed');
+            return data;
+        }
+
+        function openLoginModal() {
+            document.getElementById('login-modal').classList.remove('hidden');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+
+        async function loginToRouter(event) {
+            event.preventDefault();
+            const password = document.getElementById('router-password').value;
+            try {
+                await api('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                document.getElementById('router-password').value = '';
+                closeLoginModal();
+                document.getElementById('router-login-btn').innerHTML = '<i class="fa-solid fa-link mr-1"></i> Router Connected';
+                await refreshRouterData();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function refreshRouterData() {
+            try {
+                const response = await api('/api/devices');
+                devices = (response.list || []).map(device => ({
+                    name: device.hostname || device.name || 'Unknown device',
+                    ip: device.ip || '',
+                    mac: (device.mac || '').toLowerCase(),
+                    status: 'Online',
+                    onlineTime: device.uptime || ''
+                }));
+                renderDevices();
+            } catch (error) {
+                console.error(error);
+                if (error.message.includes('not logged in')) openLoginModal();
+            }
+
+        }
+
+        async function refreshManagedDevices() {
+            const policy = await api('/api/managed');
+            const manual = (policy.manualBlocks || []).map(device => ({
+                ...device,
+                status: 'Blocked manually',
+                expiresAt: null,
+                credit: false
+            }));
+            const timed = (policy.credits || []).map(device => ({
+                ...device,
+                status: new Date(device.expiresAt) <= new Date() ? 'Access expired' : 'Access active',
+                credit: true
+            }));
+            const timedMacs = new Set(timed.map(device => device.mac.toLowerCase()));
+            managedDevices = [
+                ...timed,
+                ...manual.filter(device => !timedMacs.has(device.mac.toLowerCase()))
+            ];
+            renderManagedDevices();
+        }
+
+        function renderManagedDevices() {
+            const body = document.getElementById('managed-devices-body');
+            body.innerHTML = '';
+            if (!managedDevices.length) {
+                body.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400">No blocked or timed devices.</td></tr>';
+                return;
+            }
+            managedDevices.forEach(device => {
+                const expiry = device.expiresAt ? new Date(device.expiresAt).toLocaleString() : '-';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold">${device.name || device.mac}</td>
+                    <td class="py-3 px-4 font-mono text-xs">${device.ip || ''}<br>${device.mac}</td>
+                    <td class="py-3 px-4"><span class="${device.status.includes('active') ? 'text-green-700' : 'text-red-700'}">${device.status}</span></td>
+                    <td class="py-3 px-4 text-xs">${expiry}</td>
+                    <td class="py-3 px-4 text-right space-x-2">
+                        <button onclick="restoreManagedDevice('${device.mac}')" class="px-2.5 py-1 bg-green-700 text-white rounded text-xs">Restore</button>
+                        ${device.credit ? `<button onclick="renewManagedDevice('${device.mac}')" class="px-2.5 py-1 bg-blue-700 text-white rounded text-xs">Renew hours</button>` : ''}
+                    </td>`;
+                body.appendChild(tr);
+            });
+        }
+
+        async function restoreManagedDevice(mac) {
+            await blockByMac(mac, false);
+            await refreshManagedDevices();
+        }
+
+        async function renewManagedDevice(mac) {
+            const device = managedDevices.find(item => item.mac.toLowerCase() === mac.toLowerCase());
+            if (!device) return;
+            const hours = Number(prompt('Additional access hours:', '2'));
+            if (!Number.isFinite(hours) || hours <= 0) return;
+            const policy = await api('/api/credits');
+            const credits = policy.credits.filter(item => item.mac.toLowerCase() !== mac.toLowerCase());
+            const base = device.expiresAt && new Date(device.expiresAt) > new Date() ? new Date(device.expiresAt) : new Date();
+            const expires = new Date(base.getTime() + hours * 60 * 60 * 1000);
+            credits.push({ id: Date.now().toString(), name: device.name, ip: device.ip, mac, hours, expiresAt: expires.toISOString(), blocked: false });
+            await api('/api/credits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credits }) });
+            await blockByMac(mac, false);
+            await refreshManagedDevices();
+        }
+
+        window.addEventListener('load', async () => {
+            try {
+                const status = await api('/api/status');
+                if (status.loggedIn) {
+                    document.getElementById('router-login-btn').innerHTML = '<i class="fa-solid fa-link mr-1"></i> Router Connected';
+                    await refreshRouterData();
+                    await refreshManagedDevices();
+                    setInterval(refreshRouterData, 10000);
+                    setInterval(refreshManagedDevices, 15000);
+                } else {
+                    openLoginModal();
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        });
+
+        async function blockDevice(mac, blocked) {
+            await api('/api/block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mac: mac, disabled: blocked ? 1 : 0 })
+            });
+            await refreshRouterData();
+        }
+
+        async function blockByIp(ip, blocked) {
+            if (!ip) return alert('This device does not have an IP address.');
+            if (blocked && !confirm(`Block Internet access for ${ip}?`)) return;
+            try {
+                await api('/api/block-ip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ method: 'ip', ip, blocked })
+                });
+                alert(blocked ? `IP ${ip} was blocked on the router.` : `IP ${ip} was unblocked.`);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function blockByMac(mac, blocked) {
+            if (!mac) return alert('This device does not expose a MAC address.');
+            if (blocked && !confirm(`Block ${mac} by MAC address on the router?`)) return;
+            try {
+                await api('/api/block', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mac,
+                        disabled: blocked ? 1 : 0,
+                        name: devices.find(device => device.mac.toLowerCase() === mac.toLowerCase())?.name || mac,
+                        ip: devices.find(device => device.mac.toLowerCase() === mac.toLowerCase())?.ip || ''
+                    })
+                });
+                alert(blocked ? `MAC ${mac} was blocked on the router.` : `MAC ${mac} was unblocked.`);
+                await refreshRouterData();
+                await refreshManagedDevices();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function setDeviceSchedule(name, ip, mac) {
+            const duration = prompt('Access duration in hours (examples: 2, 24; enter 168 for one week):', '2');
+            if (!duration) return;
+            const hours = Number(duration);
+            if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) return alert('Enter a duration from 1 hour to one year.');
+            const expires = new Date(Date.now() + hours * 60 * 60 * 1000);
+            const policy = await api('/api/credits');
+            const credits = policy.credits.filter(credit => credit.mac !== mac);
+            credits.push({
+                id: Date.now().toString(),
+                name,
+                ip,
+                mac,
+                hours,
+                expiresAt: expires.toISOString(),
+                blocked: false
+            });
+            await api('/api/credits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credits })
+            });
+            await api('/api/block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mac, disabled: 0 })
+            });
+            alert(`${name} has ${hours} hour(s) of access. Internet access ends automatically at ${expires.toLocaleString()}.`);
+        }
+
+        function addStaticLeasePrompt() {
+            const hostname = prompt('Device hostname:');
+            if (!hostname) return;
+            const mac = prompt('Device MAC address:');
+            const ip = prompt('Reserved IP address:');
+            if (!mac || !ip) return;
+            const existing = dhcpLeases.find(lease => lease.mac.toLowerCase() === mac.toLowerCase());
+            if (existing) {
+                existing.hostname = hostname;
+                existing.ip = ip;
+                existing.type = 'Static';
+            } else {
+                dhcpLeases.push({ hostname, mac: mac.toLowerCase(), ip, type: 'Static' });
+            }
+            renderDHCPLeases();
+            switchTab('dhcp');
+        }
+
+        // Check if MAC Address is Randomized (bit 1 of 1st octet is 1)
+        function isRandomizedMAC(mac) {
+            if (!mac || mac.length < 2) return false;
+            const firstOctetHex = mac.split(':')[0];
+            const firstOctetInt = parseInt(firstOctetHex, 16);
+            return (firstOctetInt & 2) !== 0; // Locally Administered Bit
+        }
+
+        // Render Clients Table
+        function renderDevices() {
+            const tbody = document.getElementById('clients-table-body');
+            tbody.innerHTML = '';
+
+            devices.forEach((dev, idx) => {
+                const isRandom = isRandomizedMAC(dev.mac);
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-gray-800">${dev.name}</td>
+                    <td class="py-3 px-4 font-mono text-xs">${dev.ip}</td>
+                    <td class="py-3 px-4 font-mono text-xs">${dev.mac}</td>
+                    <td class="py-3 px-4">
+                        ${isRandom 
+                            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Randomized (Private)</span>`
+                            : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800"><i class="fa-solid fa-check mr-1"></i> Permanent Hardware</span>`
+                        }
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-flex items-center text-xs font-medium text-green-600">
+                            <span class="h-2 w-2 rounded-full bg-green-500 mr-1.5"></span> Connected
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right space-x-2">
+                        <button onclick="createRuleForDevice('${dev.name}', '${dev.ip}', '${dev.mac}')" class="px-2.5 py-1 bg-airtel-red hover:bg-airtel-dark text-white rounded text-xs font-medium transition">
+                            <i class="fa-solid fa-shield mr-1"></i> Quick Rule
+                        </button>
+                        <button onclick="bindStaticIP('${dev.name}', '${dev.mac}', '${dev.ip}')" class="px-2.5 py-1 bg-gray-800 hover:bg-black text-white rounded text-xs font-medium transition">
+                            <i class="fa-solid fa-lock mr-1"></i> Bind IP
+                        </button>
+                        <button onclick="setDeviceSchedule('${dev.name}', '${dev.ip}', '${dev.mac}')" class="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs font-medium transition">
+                            <i class="fa-solid fa-clock mr-1"></i> Usage Time
+                        </button>
+                        <button onclick="blockByIp('${dev.ip}', true)" class="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white rounded text-xs font-medium transition">
+                            <i class="fa-solid fa-ban mr-1"></i> Block IP
+                        </button>
+                        <button onclick="blockByMac('${dev.mac}', true)" class="px-2.5 py-1 bg-red-950 hover:bg-black text-white rounded text-xs font-medium transition">
+                            <i class="fa-solid fa-shield-halved mr-1"></i> Block MAC
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render Firewall Rules Table
+        function renderFirewallRules() {
+            const tbody = document.getElementById('firewall-rules-body');
+            tbody.innerHTML = '';
+
+            if (firewallRules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-gray-400">No active firewall rules created.</td></tr>`;
+                return;
+            }
+
+            firewallRules.forEach(rule => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-gray-800">${rule.name}</td>
+                    <td class="py-3 px-4"><span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-mono">${rule.filterType}</span></td>
+                    <td class="py-3 px-4 font-mono text-xs">${rule.sourceIp || rule.sourceMac || 'LAN'}</td>
+                    <td class="py-3 px-4 font-mono text-xs">${rule.destIp || 'WAN'}</td>
+                    <td class="py-3 px-4 text-xs">${rule.port} / ${rule.proto}</td>
+                    <td class="py-3 px-4">
+                        ${rule.action === 'ALLOW' 
+                            ? `<span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">ALLOW</span>`
+                            : `<span class="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">DENY</span>`
+                        }
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="deleteRule(${rule.id})" class="text-red-600 hover:text-red-800 font-medium text-xs">
+                            <i class="fa-solid fa-trash"></i> Delete
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render DHCP Leases Table
+        function renderDHCPLeases() {
+            const tbody = document.getElementById('dhcp-leases-body');
+            tbody.innerHTML = '';
+
+            dhcpLeases.forEach(lease => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-gray-800">${lease.hostname}</td>
+                    <td class="py-3 px-4 font-mono text-xs">${lease.mac}</td>
+                    <td class="py-3 px-4 font-mono text-xs font-bold text-blue-600">${lease.ip}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${lease.type === 'Static' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}">
+                            ${lease.type}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="removeLease('${lease.mac}')" class="text-gray-400 hover:text-red-600 text-xs">
+                            <i class="fa-solid fa-xmark"></i> Release
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Tab Switching
+        function switchTab(tabName) {
+            ['devices', 'firewall', 'dhcp', 'managed'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-btn-${t}`);
+                btn.classList.remove('border-airtel-red', 'text-airtel-red');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+            activeBtn.classList.add('border-airtel-red', 'text-airtel-red');
+            activeBtn.classList.remove('border-transparent', 'text-gray-500');
+        }
+
+        // Modal Control
+        function openRuleModal() {
+            document.getElementById('rule-modal').classList.remove('hidden');
+        }
+
+        function closeRuleModal() {
+            document.getElementById('rule-modal').classList.add('hidden');
+        }
+
+        function toggleFilterFields(type) {
+            const macContainer = document.getElementById('field-mac-container');
+            const ipContainer = document.getElementById('field-source-ip-container');
+            if (type === 'MAC') {
+                macContainer.classList.remove('hidden');
+                ipContainer.classList.add('hidden');
+            } else {
+                macContainer.classList.add('hidden');
+                ipContainer.classList.remove('hidden');
+            }
+        }
+
+        function createRuleForDevice(name, ip, mac) {
+            document.getElementById('modal-name').value = name;
+            document.getElementById('modal-source-ip').value = ip;
+            document.getElementById('modal-mac').value = mac;
+            openRuleModal();
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('modal-name').value;
+            const filterType = document.querySelector('input[name="filterType"]:checked').value;
+            const sourceMac = document.getElementById('modal-mac').value;
+            const sourceIp = document.getElementById('modal-source-ip').value;
+            const destIp = document.getElementById('modal-dest-ip').value || 'WAN';
+            const port = document.getElementById('modal-port').value || 'ALL';
+            const proto = document.getElementById('modal-protocol').value;
+            const action = document.getElementById('modal-action').value;
+
+            const newRule = {
+                id: Date.now(),
+                name,
+                filterType,
+                sourceMac: filterType === 'MAC Filter' ? sourceMac : '',
+                sourceIp: filterType === 'IP Filter' ? sourceIp : '',
+                destIp,
+                port,
+                proto,
+                action
+            };
+
+            firewallRules.push(newRule);
+            renderFirewallRules();
+            closeRuleModal();
+            switchTab('firewall');
+        }
+
+        function deleteRule(id) {
+            firewallRules = firewallRules.filter(r => r.id !== id);
+            renderFirewallRules();
+        }
+
+        function bindStaticIP(hostname, mac, ip) {
+            const existing = dhcpLeases.find(l => l.mac === mac);
+            if (existing) {
+                existing.type = 'Static';
+            } else {
+                dhcpLeases.push({ hostname, mac, ip, type: 'Static' });
+            }
+            renderDHCPLeases();
+            switchTab('dhcp');
+        }
+
+        function toggleStrictWhitelistMode() {
+            strictWhitelist = !strictWhitelist;
+            const btn = document.getElementById('strict-whitelist-btn');
+            if (strictWhitelist) {
+                btn.className = "bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition shadow";
+                btn.innerHTML = `<i class="fa-solid fa-shield-check mr-1.5 text-white"></i> Strict Whitelist: ON`;
+                alert('Strict Whitelist Enabled! Only devices with explicit Static IP Bindings and ALLOW rules will receive access.');
+            } else {
+                btn.className = "bg-red-950 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition shadow";
+                btn.innerHTML = `<i class="fa-solid fa-shield-halved mr-1.5 text-yellow-400"></i> Strict Whitelist: OFF`;
+            }
+        }
+
+        // Initialize Render
+        renderDevices();
+        renderFirewallRules();
+        renderDHCPLeases();
+    </script>
+</body>
+</html>
