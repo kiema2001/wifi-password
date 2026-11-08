@@ -1,0 +1,14 @@
+services:
+  wifi-dashboard:
+    build: .
+    container_name: airtel-wifi-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - wifi-dashboard-data:/data
+    environment:
+      WIFI_ROUTER_URL: http://192.168.1.1
+
+volumes:
+  wifi-dashboard-data:

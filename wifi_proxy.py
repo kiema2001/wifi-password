@@ -12,7 +12,11 @@ from urllib.request import HTTPCookieProcessor, build_opener, Request
 ROUTER = "http://192.168.1.1"
 API = ROUTER + "/cgi-bin/luci/admin/routerweb"
 session = {"opener": None}
-STATE_FILE = r"C:\Users\Henry\Desktop\wifi-policy.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.environ.get("WIFI_DASHBOARD_DIR", BASE_DIR)
+ROUTER = os.environ.get("WIFI_ROUTER_URL", ROUTER).rstrip("/")
+API = ROUTER + "/cgi-bin/luci/admin/routerweb"
+STATE_FILE = os.environ.get("WIFI_POLICY_FILE", os.path.join(BASE_DIR, "wifi-policy.json"))
 state_lock = threading.Lock()
 
 if os.path.exists(STATE_FILE):
@@ -140,7 +144,7 @@ def router_request(path, method="GET", payload=None):
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=r"C:\Users\Henry\Desktop", **kwargs)
+        super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
     def do_POST(self):
         if self.path == "/api/login":
@@ -261,4 +265,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     threading.Thread(target=schedule_worker, daemon=True).start()
-    ThreadingHTTPServer(("127.0.0.1", 8080), Handler).serve_forever()
+    port = int(os.environ.get("WIFI_DASHBOARD_PORT", "8080"))
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
