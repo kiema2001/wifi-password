@@ -9,6 +9,7 @@ services:
       - wifi-dashboard-data:/data
     environment:
       WIFI_ROUTER_URL: http://192.168.1.1
+      WIFI_ADMIN_PASSWORD: ${WIFI_ADMIN_PASSWORD:?Create a .env file with WIFI_ADMIN_PASSWORD}
 
 volumes:
   wifi-dashboard-data:

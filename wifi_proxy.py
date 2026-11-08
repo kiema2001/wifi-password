@@ -2,6 +2,9 @@ import json
 import os
 import threading
 import time
+import base64
+import binascii
+import hmac
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from http.cookiejar import CookieJar
@@ -17,6 +20,7 @@ STATIC_DIR = os.environ.get("WIFI_DASHBOARD_DIR", BASE_DIR)
 ROUTER = os.environ.get("WIFI_ROUTER_URL", ROUTER).rstrip("/")
 API = ROUTER + "/cgi-bin/luci/admin/routerweb"
 STATE_FILE = os.environ.get("WIFI_POLICY_FILE", os.path.join(BASE_DIR, "wifi-policy.json"))
+ADMIN_PASSWORD = os.environ.get("WIFI_ADMIN_PASSWORD", "")
 state_lock = threading.Lock()
 
 if os.path.exists(STATE_FILE):
@@ -146,7 +150,27 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
+    def require_admin_auth(self):
+        if not ADMIN_PASSWORD:
+            return True
+        authorization = self.headers.get("Authorization", "")
+        if authorization.startswith("Basic "):
+            try:
+                credentials = base64.b64decode(authorization[6:].encode("ascii")).decode("utf-8")
+                username, password = credentials.split(":", 1)
+                if hmac.compare_digest(username, "admin") and hmac.compare_digest(password, ADMIN_PASSWORD):
+                    return True
+            except (ValueError, UnicodeDecodeError, binascii.Error):
+                pass
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Wi-Fi Dashboard", charset="UTF-8"')
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        return False
+
     def do_POST(self):
+        if not self.require_admin_auth():
+            return
         if self.path == "/api/login":
             length = int(self.headers.get("Content-Length", "0"))
             request = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -223,6 +247,8 @@ class Handler(SimpleHTTPRequestHandler):
             send_json(self, 502, {"error": str(error)})
 
     def do_GET(self):
+        if not self.require_admin_auth():
+            return
         if self.path == "/api/status":
             send_json(self, 200, {"loggedIn": session["opener"] is not None})
             return
